@@ -1,0 +1,8 @@
+html, body {
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+}
+.image-list-grid-container {
+    height: 100%;
+}
