@@ -1,5 +1,5 @@
-const { v4: uuid } = require('uuid')
+const { v4: uuid } = require("uuid");
 
-const generateUUID = () => uuid()
+const generateUUID = () => uuid();
 
-module.exports = generateUUID
+module.exports = generateUUID;
