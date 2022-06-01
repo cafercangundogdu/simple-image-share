@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useMemo, useCallback } from "react";
 import {
   Badge,
   Button,
@@ -111,7 +111,7 @@ export default function App() {
       })
     );
 
-    handleDeletePhoto(photoId, state.selectedClientId);
+    handleDeletePhoto({ messageData: photoId, from: state.selectedClientId });
   };
 
   /**
@@ -134,7 +134,7 @@ export default function App() {
    * @param from
    * @param isReverted
    */
-  const handleNewPhoto = (id, photoData, from, isReverted) => {
+  const handleNewPhoto = useCallback(({ id, messageData: photoData, from, isReverted }) => {
     setState((prevState) => {
       const photos = prevState.clients[from].photos;
       photos[id] = { id, photoData, from, isReverted };
@@ -147,47 +147,48 @@ export default function App() {
         return { ...prevState, clients };
       });
     }
-  };
+  }, []);
 
   /**
    * Deletes the received photo from the client from state
    * @param id
    * @param from
    */
-  const handleDeletePhoto = (id, from) => {
+  const handleDeletePhoto = useCallback(({ id, messageData: photoId, from, isReverted }) => {
     setState((prevState) => {
+      console.log("prevState-delete", prevState, "from", from);
       const photos = prevState.clients[from].photos;
-      delete photos[id];
+      delete photos[photoId];
       return { ...prevState, photos };
     });
-  };
+  }, []);
 
   /**
    * Assigns the clients to state
    * @param _clients
    */
-  const handleClients = (_clients) => {
+  const handleClients = useCallback(({ id, messageData: _clients, from, isReverted }) => {
     let clients = _clients.reduce((o, c) => ((o[c["id"]] = c), o), {});
     setState((prevState) => ({ ...prevState, clients }));
-  };
+  }, []);
 
   /**
    * Assigns the connected client to state
    * @param client
    */
-  const handleClientConnected = (client) => {
+  const handleClientConnected = useCallback(({ id, messageData: client, from, isReverted }) => {
     setState((prevState) => {
       const clients = prevState.clients;
       clients[client.id] = client;
       return { ...prevState, clients };
     });
-  };
+  }, []);
 
   /**
    * Deletes the disconnected client from state
    * @param client
    */
-  const handleClientDisconnected = (client) => {
+  const handleClientDisconnected = useCallback(({ id, messageData: client, from, isReverted }) => {
     setState((prevState) => {
       const clients = prevState.clients;
       delete clients[client.id];
@@ -196,7 +197,24 @@ export default function App() {
     setState((prevState) => {
       return { ...prevState, selectedClientId: undefined };
     });
-  };
+  }, []);
+
+  const handleOwner = useCallback(({ id, messageData: owner, from, isReverted }) => {
+    setState((prevState) => ({ ...prevState, owner }));
+    document.title = owner.name;
+  }, []);
+
+  const handleMap = useMemo(
+    () => ({
+      owner: handleOwner,
+      clients: handleClients,
+      "client-connected": handleClientConnected,
+      "client-disconnected": handleClientDisconnected,
+      photo: handleNewPhoto,
+      "photo-delete": handleDeletePhoto,
+    }),
+    [handleClients, handleOwner, handleClientConnected, handleClientDisconnected, handleNewPhoto, handleDeletePhoto]
+  );
 
   useEffect(() => {
     socket.onopen = () => {
@@ -207,22 +225,9 @@ export default function App() {
     };
     socket.onmessage = ({ data }) => {
       const { id, type, messageData, from, isReverted } = JSON.parse(data);
-      if (type === "owner") {
-        setState((prevState) => ({ ...prevState, owner: messageData }));
-        document.title = messageData.name;
-      } else if (type === "clients") {
-        handleClients(messageData);
-      } else if (type === "client-connected") {
-        handleClientConnected(messageData);
-      } else if (type === "client-disconnected") {
-        handleClientDisconnected(messageData);
-      } else if (type === "photo") {
-        handleNewPhoto(id, messageData, from, isReverted);
-      } else if (type === "photo-delete") {
-        handleDeletePhoto(messageData, from);
-      }
+      handleMap[type]({ id, messageData, from, isReverted });
     };
-  }, [state, socket]);
+  }, [state, socket, handleMap]);
 
   return (
     <div className="App">
