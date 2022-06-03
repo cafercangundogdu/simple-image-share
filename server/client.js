@@ -16,6 +16,7 @@ class Client {
       id: this.id,
       name: this.name,
       photos: {},
+      texts: {},
     };
   }
 }

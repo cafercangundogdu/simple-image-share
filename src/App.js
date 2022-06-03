@@ -3,6 +3,10 @@ import {
   Badge,
   Button,
   Grid,
+  Card,
+  CardActions,
+  CardContent,
+  Typography,
   Backdrop,
   IconButton,
   ImageListItemBar,
@@ -14,6 +18,7 @@ import {
   List,
   ListSubheader,
   Divider,
+  TextField,
 } from "@material-ui/core";
 import { AddAPhoto, Send, Person, DeleteForever } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
@@ -55,6 +60,13 @@ const useStyles = makeStyles((theme) => ({
     position: "absolute",
     zIndex: theme.zIndex.drawer + 1,
   },
+  card: {
+    minWidth: 275,
+    height: 50,
+  },
+  title: {
+    fontSize: 18,
+  },
 }));
 
 export default function App() {
@@ -66,9 +78,12 @@ export default function App() {
     clients: {},
     owner: {},
     photos: {},
+    texts: {},
     selectedImg: "",
     selectedClientId: undefined,
   });
+
+  const [textMessage, setTextMessage] = useState("");
 
   /**
    * Assigns selected photo to state as selectedImg.
@@ -98,6 +113,32 @@ export default function App() {
     setState((prevState) => ({ ...prevState, selectedImg: "" }));
   };
 
+  const sendText = () => {
+    socket.send(
+      JSON.stringify({
+        type: "text",
+        messageData: textMessage,
+        toId: state.selectedClientId,
+      })
+    );
+    setState((prevState) => ({ ...prevState }));
+    setTextMessage("");
+  };
+
+  /*
+  const sendMessage = ({ type, data, toId }) => {
+    //type -> photo || text
+    socket.send(
+      JSON.stringify({
+        type,
+        messageData: data,
+        toId,
+      })
+    );
+    setState((prevState) => ({ ...prevState, selectedImg: "" }));
+  };
+  */
+
   /**
    * Deletes the image from the client.
    * @param photoId
@@ -112,6 +153,18 @@ export default function App() {
     );
 
     handleDeletePhoto({ messageData: photoId, from: state.selectedClientId });
+  };
+
+  const deleteText = (textId) => {
+    socket.send(
+      JSON.stringify({
+        type: "text-delete",
+        messageData: textId,
+        toId: state.selectedClientId,
+      })
+    );
+
+    handleDeleteText({ messageData: textId, from: state.selectedClientId });
   };
 
   /**
@@ -149,6 +202,21 @@ export default function App() {
     }
   }, []);
 
+  const handleNewText = useCallback(({ id, messageData: textData, from, isReverted }) => {
+    setState((prevState) => {
+      const texts = prevState.clients[from].texts;
+      texts[id] = { id, textData, from, isReverted };
+      return { ...prevState, texts };
+    });
+    if (!isReverted) {
+      setState((prevState) => {
+        const clients = prevState.clients;
+        clients[from]["newMessage"] = true;
+        return { ...prevState, clients };
+      });
+    }
+  }, []);
+
   /**
    * Deletes the received photo from the client from state
    * @param id
@@ -156,10 +224,17 @@ export default function App() {
    */
   const handleDeletePhoto = useCallback(({ id, messageData: photoId, from, isReverted }) => {
     setState((prevState) => {
-      console.log("prevState-delete", prevState, "from", from);
       const photos = prevState.clients[from].photos;
       delete photos[photoId];
       return { ...prevState, photos };
+    });
+  }, []);
+
+  const handleDeleteText = useCallback(({ id, messageData: textId, from, isReverted }) => {
+    setState((prevState) => {
+      const texts = prevState.clients[from].texts;
+      delete texts[textId];
+      return { ...prevState, texts };
     });
   }, []);
 
@@ -211,9 +286,19 @@ export default function App() {
       "client-connected": handleClientConnected,
       "client-disconnected": handleClientDisconnected,
       photo: handleNewPhoto,
+      text: handleNewText,
       "photo-delete": handleDeletePhoto,
+      "text-delete": handleDeleteText,
     }),
-    [handleClients, handleOwner, handleClientConnected, handleClientDisconnected, handleNewPhoto, handleDeletePhoto]
+    [
+      handleClients,
+      handleOwner,
+      handleClientConnected,
+      handleClientDisconnected,
+      handleNewPhoto,
+      handleDeletePhoto,
+      handleNewText,
+    ]
   );
 
   useEffect(() => {
@@ -319,6 +404,26 @@ export default function App() {
                       />
                     </ImageListItem>
                   ))}
+                {state.selectedClientId &&
+                  state.clients[state.selectedClientId] &&
+                  Object.values(state.clients[state.selectedClientId].texts).map((item) => (
+                    <Card key={item.id} className={classes.card}>
+                      <CardContent>
+                        <Typography className={classes.title} color="textSecondary" gutterBottom>
+                          {item.textData}
+                        </Typography>
+                      </CardContent>
+                      <CardActions>
+                        <IconButton
+                          onClick={() => {
+                            deleteText(item.id);
+                          }}
+                        >
+                          <DeleteForever />
+                        </IconButton>
+                      </CardActions>
+                    </Card>
+                  ))}
               </ImageList>
             </Grid>
             <Grid
@@ -345,8 +450,28 @@ export default function App() {
                   </IconButton>
                 </label>
               </Grid>
+              <Grid item xs={8}>
+                <TextField
+                  fullWidth
+                  value={textMessage}
+                  onChange={(e) => {
+                    console.log("val", e.target.value);
+                    setTextMessage(e.target.value);
+                  }}
+                />
+              </Grid>
               <Grid item>
-                <IconButton color="primary" component="span" onClick={sendPhoto}>
+                <IconButton
+                  color="primary"
+                  component="span"
+                  onClick={() => {
+                    if (textMessage.length > 0) {
+                      sendText();
+                    } else {
+                      sendPhoto();
+                    }
+                  }}
+                >
                   <Send />
                 </IconButton>
               </Grid>
