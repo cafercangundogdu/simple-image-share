@@ -298,6 +298,7 @@ export default function App() {
       handleNewPhoto,
       handleDeletePhoto,
       handleNewText,
+      handleDeleteText,
     ]
   );
 
@@ -454,8 +455,12 @@ export default function App() {
                 <TextField
                   fullWidth
                   value={textMessage}
+                  onKeyDown={(e) => {
+                    if (e.code === "Enter") {
+                      sendText();
+                    }
+                  }}
                   onChange={(e) => {
-                    console.log("val", e.target.value);
                     setTextMessage(e.target.value);
                   }}
                 />
